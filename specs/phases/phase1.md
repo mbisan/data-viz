@@ -3,7 +3,7 @@ The first phase involves creating the bones of the app's GUI:
 
 - Primary window: a full view container.
   - A tab-style layout for each chart.
-  - By default two tabs: "Datasources" and "Chart 1", with a button to add new charts. The chart names can be changed by double clicking on it.
+  - By default one tab: "Datasources", with a button to add new charts. The chart names can be changed by double clicking on it.
 - The "Datasources" tab has a list of open datasources, and an sql editor.
   - Sidebar of the left. Resizable.
     - The sidebar contains a button to load a file. For now only a placeholder.
@@ -15,24 +15,23 @@ The first phase involves creating the bones of the app's GUI:
     - The SQL editor occupies the full view when the table view is collapsed.
     - The table columns occupy the column names, adjusted, and do not extend the full width. If there are enough columns, a horizontal sidebar allows viewing the rest of the columns.
     - The save data button goes on the right side, the toggle view button on the left. Next to the save data button an indicator of total row numbers appears.
-- The chart tabs contain the following:
-  - Sidebar with a selector of datasource and list of columns on the left. Resizable. The type of the column is shown after the column name, name on the left, type on the right.
-  - Main view for the plot. Leave empty for now.
+    - If there is too much data, pagination is enabled.
+- The chart tabs are empty for now.
 
-This phase focuses strictly on layout, visual hierarchy, and component placement—no backend data processing or Polars queries are wired up yet.
+This phase focuses on layout.
 
 Code & Package Organization
 - `main.py`: Entry point setting up imgui-bundle viewport/runner, initializing the UI, and running the render loop.
 - `gui/`:
   - `gui/layout.py`: Main window, tab bar coordinator, and dynamic `+` tab handling.
   - `gui/datasources.py`: Layout components for the "Datasources" tab.
-  - `gui/chart.py`: Layout components for chart tabs.
   - `gui/config.py`: UI constants.
+  - `gui/helpers.py`: Helper functions.
+  - `gui/state.py`: Classes that keeps track of the datasources and app state.
 
 Tasks:
 
-- [ ] Application starts cleanly via `uv run python main.py` and opens a styled imgui-bundle window.
-- [ ] "Datasources" tab displays sidebar (Load File button + Datasource list), SQL editor, Action buttons, and collapsible Results preview with export options.
-- [ ] Default "Chart 1" tab is present with a datasource picker, column list sidebar, and empty plot area.
-- [ ] Clicking the `+` button creates a new chart tab.
-- [ ] Window resizes cleanly.
+- [X] Application starts cleanly via `uv run python main.py` and opens a styled imgui-bundle window.
+- [X] "Datasources" tab displays sidebar (Load File button + Datasource list), SQL editor, Action buttons, and collapsible Results preview with export options.
+- [X] Clicking the `+` button creates a new chart tab.
+- [X] Window resizes cleanly.

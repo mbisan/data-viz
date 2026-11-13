@@ -3,6 +3,8 @@
 from typing import Optional, Any
 from imgui_bundle import hello_imgui, imgui
 
+DEBUG = True
+
 # Window Settings
 APP_TITLE = "data-viz"
 WINDOW_WIDTH = 1280

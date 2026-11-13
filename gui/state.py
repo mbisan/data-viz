@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 import time
 from typing import List, Tuple, Dict, Optional
 from imgui_bundle import imgui_color_text_edit as ed
-from gui.config import DEFAULT_RESULTS_HEIGHT
+from gui.config import DEFAULT_RESULTS_HEIGHT, DEBUG
 from gui.helpers import create_sql_editor
 
 import polars as pl
@@ -76,16 +76,24 @@ class AppState:
     def __init__(self) -> None:
         self.datasources: Datasources = Datasources()
 
-        self.datasources.add_datasource(
-            'segsocial_consolidado',
-            pl.scan_parquet('test_data/segsocial_consolidado.parquet')
-        )
-        self.datasources.add_datasource(
-            'iris',
-            pl.scan_csv('test_data/iris.csv')
-        )
-
         self.queries: Dict[int, QueryTab] = {}
+
+        if DEBUG:
+            self.datasources.add_datasource(
+                'segsocial_consolidado',
+                pl.scan_parquet('test_data/segsocial_consolidado.parquet')
+            )
+            self.datasources.add_datasource(
+                'iris',
+                pl.scan_csv('test_data/iris.csv')
+            )
+            self.queries[0] = QueryTab(id=0, name='Test Query')
+            test_query = 'SELECT * FROM segsocial_consolidado'
+            self.queries[0].editor.set_text(test_query)
+            rows, res_df = self.datasources.execute_query(test_query) # this can throw an exception
+            self.queries[0].result_rows = rows
+            self.queries[0].result_dataframe = res_df
+
         self.active_query_id: int = 0
 
         self.charts: Dict[int, ChartTab] = {}
