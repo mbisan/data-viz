@@ -9,16 +9,12 @@ The first phase involves creating the bones of the app's GUI:
     - The sidebar contains a button to load a file. For now only a placeholder.
     - The list extends to the bottom of the view.
   - SQL editor on the right. A button to "execute query". A button to "save as datasource". The SQL editor has tabs (same as the viewport) and a + button to add a new empty query.
-    - The SQL editor has numbered lines.
-    - The current line has a slight highlight.
-    - Easy indentation (and de-indentation) using tabs.
-    - Easily add comments with a shortcut (default ctrl+shift+7).
-    - Enter inside an indented block leaves you in the same indented block.
-    - Autocomplete for names matching open datasources.
+    - The SQL editor comes from the package: imgui-bundle.
   - Below the SQL editor, a collapsible table view of the results. A dropdown menu with buttons to save data to: clipboard, csv, json, excel.
     - When collapsed, the table view is placed on the bottom of the view. (i.e. it opens from the bottom).
     - The SQL editor occupies the full view when the table view is collapsed.
     - The table columns occupy the column names, adjusted, and do not extend the full width. If there are enough columns, a horizontal sidebar allows viewing the rest of the columns.
+    - The save data button goes on the right side, the toggle view button on the left. Next to the save data button an indicator of total row numbers appears.
 - The chart tabs contain the following:
   - Sidebar with a selector of datasource and list of columns on the left.
   - Main view for the plot. Leave empty for now.
