@@ -9,4 +9,7 @@ wheels/
 # Virtual environments
 .venv
 
+# ImGui configuration files
+*.ini
+
 test_data/
