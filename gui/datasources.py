@@ -429,7 +429,9 @@ def _render_table(query: QueryTab, height: float) -> None:
                 for col_idx, (sch, val) in enumerate(zip(schema_types, row)):
                     imgui.table_set_column_index(col_idx)
                     if sch.is_numeric():
-                        if sch.is_float():
+                        if not isinstance(val, (float, int)):
+                            text = 'NULL'
+                        elif sch.is_float():
                             text = f"{val:.3f}"
                         else:
                             text = str(val)
