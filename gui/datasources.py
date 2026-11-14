@@ -168,6 +168,15 @@ def _render_right_pane(state: AppState) -> None:
 
     io = imgui.get_io()
     focused = imgui.is_window_focused(imgui.FocusedFlags_.child_windows)
+    if focused:
+        if imgui.is_key_pressed(imgui.Key.keypad7, repeat=True):
+            if not any(c == ord("7") for c in io.input_queue_characters):
+                io.add_key_event(imgui.Key.home, True)
+                io.add_key_event(imgui.Key.home, False)
+        if imgui.is_key_pressed(imgui.Key.keypad1, repeat=True):
+            if not any(c == ord("1") for c in io.input_queue_characters):
+                io.add_key_event(imgui.Key.end, True)
+                io.add_key_event(imgui.Key.end, False)
     shift_enter = (
         focused and io.key_ctrl and not io.key_shift and not io.key_alt
         and imgui.is_key_pressed(imgui.Key.enter, False)
