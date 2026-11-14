@@ -117,32 +117,6 @@ class AppState:
 
         self.queries: Dict[int, QueryTab] = {}
 
-        if DEBUG:
-            self.datasources.add_datasource(
-                'segsocial_consolidado',
-                pl.scan_parquet('test_data/segsocial_consolidado.parquet'),
-                'LOCAL',
-                'test_data/segsocial_consolidado.parquet'
-            )
-            self.datasources.add_datasource(
-                'iris',
-                pl.scan_csv('test_data/iris.csv'),
-                'LOCAL',
-                'test_data/iris.csv'
-            )
-            self.datasources.add_datasource(
-                'test_cases',
-                pl.scan_csv('test_data/test.csv'),
-                'LOCAL',
-                'test_data/test.csv'
-            )
-            self.queries[0] = QueryTab(id=0, name='Test Query')
-            test_query = 'SELECT * FROM segsocial_consolidado'
-            self.queries[0].editor.set_text(test_query)
-            rows, res_df = self.datasources.execute_query(test_query) # this can throw an exception
-            self.queries[0].result_rows = rows
-            self.queries[0].result_dataframe = res_df
-
         self.active_query_id: int = 0
         self.pending_select_query_id: int | None = None
         self.pending_delete_query_id: int | None = None
@@ -158,6 +132,15 @@ class AppState:
         self.results_collapsed: bool = False
         self.datasources_sidebar_width: float = 250.0
         self.results_height = DEFAULT_RESULTS_HEIGHT
+
+        if DEBUG:
+            self.load_state('test_data/state.data-viz')
+
+    def load_state(self, filename: str):
+        pass
+
+    def save_state(self, filename: str):
+        pass
 
     def set_status(self, message: str) -> None:
         self.status_message = message
