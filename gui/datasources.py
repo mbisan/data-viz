@@ -1,6 +1,7 @@
 from time import time
 
 from imgui_bundle import imgui, rich_md
+from imgui_bundle.portable_file_dialogs import open_file
 from gui.config import (
     MIN_EDITOR_HEIGHT,
     MAX_UNPAGED_CELLS,
@@ -63,7 +64,33 @@ def _render_sidebar(state: AppState) -> None:
     imgui.spacing()
 
     if imgui.button("+ Load File", imgui.ImVec2(-1.0, 32.0)):
-        state.set_status("File loader placeholder: File dialog will be connected in Phase 2.")
+        try:
+            state.file_dialog = open_file(
+                "Select data file",
+                "",
+                ["Data files (*.parquet *.csv *.xlsx *.xls)", "*.parquet *.csv *.xlsx *.xls", "All files", "*"],
+            )
+        except Exception as e:
+            state.set_status(f"Error opening file dialog: {e}")
+
+    if state.file_dialog is not None and state.file_dialog.ready():
+        try:
+            results = state.file_dialog.result()
+        except Exception as e:
+            results = []
+            state.set_status(f"Error reading file dialog: {e}")
+        state.file_dialog = None
+        for file_path in results:
+            if file_path:
+                state.files_to_process.append(file_path)
+
+    if len(state.files_to_process)>0 and not state.files_to_process_popup_open:
+        state.files_to_process_popup_open = True
+        print('open popup')
+        imgui.open_popup("Save as Datasource From File")
+
+    if len(state.files_to_process)>0:
+        _render_save_datasource_from_file_popup(state, state.files_to_process[0], "Save as Datasource From File")
 
     imgui.spacing()
     imgui.separator()
@@ -317,6 +344,55 @@ def _render_results_section(state: AppState, active_query: QueryTab, table_heigh
         _render_table(active_query, table_height)
 
 
+def _render_save_datasource_from_file_popup(state: AppState, path: str, popup_id: str) -> None:
+    center = imgui.get_main_viewport().get_center()
+    imgui.set_next_window_pos(center, imgui.Cond_.appearing, imgui.ImVec2(0.5, 0.5))
+
+    opened, _ = imgui.begin_popup_modal(
+        popup_id, None, imgui.WindowFlags_.always_auto_resize
+    )
+    if not opened:
+        return
+
+    imgui.text("Name for the new datasource:")
+    imgui.set_next_item_width(300.0)
+    if imgui.is_window_appearing():
+        imgui.set_keyboard_focus_here()
+
+    submitted, state.save_ds_name = imgui.input_text(
+        "##save_ds_name",
+        state.save_ds_name,
+        imgui.InputTextFlags_.enter_returns_true,
+    )
+
+    name = state.save_ds_name.strip()
+    valid = bool(name)
+
+    imgui.spacing()
+
+    imgui.begin_disabled(not valid)
+    ok = imgui.button("OK", imgui.ImVec2(120.0, 0.0))
+    imgui.end_disabled()
+
+    imgui.same_line()
+    cancel = imgui.button("Cancel", imgui.ImVec2(120.0, 0.0))
+
+    if cancel or imgui.is_key_pressed(imgui.Key.escape):
+        imgui.close_current_popup()
+    elif (ok or submitted) and valid:
+        state.files_to_process = [f for f in state.files_to_process if f!=path]
+        state.files_to_process_popup_open = False
+        try:
+            state.datasources.add_datasource(name, "LOCAL", path)
+            state.set_status(f"Saved query results as new datasource: '{name}'")
+            imgui.close_current_popup()
+        except DatasourceError as e:
+            state.set_status(f"Something went wrong while loading the file.")
+            imgui.close_current_popup()
+
+    imgui.end_popup()
+
+
 def _render_save_datasource_popup(state: AppState, query: QueryTab, popup_id: str) -> None:
     center = imgui.get_main_viewport().get_center()
     imgui.set_next_window_pos(center, imgui.Cond_.appearing, imgui.ImVec2(0.5, 0.5))
@@ -355,8 +431,7 @@ def _render_save_datasource_popup(state: AppState, query: QueryTab, popup_id: st
     elif (ok or submitted) and valid:
         try:
             query_str = query.editor.get_text()
-            df = state.datasources.sql_context.execute(query_str)
-            state.datasources.add_datasource(name, df, 'QUERY', query_str)
+            state.datasources.add_datasource(name, "QUERY", query_str)
             state.set_status(f"Saved query results as new datasource: '{name}'")
             imgui.close_current_popup()
         except DatasourceError as e:

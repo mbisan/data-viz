@@ -57,6 +57,6 @@ Loading a file causes the state to reset (clean SQL context, clean queries, clea
 
 The actual loading (scan_parquet/scan_csv/read_excel) is moved into the Datasources add_datasource method, that drops the need of "data" parameter, since it loads it in place from "source".
 
-- [] The yaml file is properly loaded into the state.
+- [X] The yaml file is properly loaded into the state.
 - [] The state is properly saved into the yaml file.
-- [] The "+ Load File" button is now functional and the user is able to select and load files from disk (parquet/csv/excel)
+- [X] The "+ Load File" button is now functional and the user is able to select and load files from disk (parquet/csv/excel)

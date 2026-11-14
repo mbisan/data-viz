@@ -1,9 +1,10 @@
 """State management for the app."""
 
 from dataclasses import dataclass, field
+from pathlib import Path
 import time
-from turtle import width
 from typing import List, Tuple, Dict, Optional
+import yaml
 from imgui_bundle import imgui_color_text_edit as ed
 from gui.config import DEFAULT_RESULTS_HEIGHT, DEBUG
 from gui.helpers import create_sql_editor
@@ -12,6 +13,9 @@ import polars as pl
 
 
 class DatasourceError(Exception):
+    pass
+
+class FileLoadError(Exception):
     pass
 
 @dataclass
@@ -37,10 +41,22 @@ class Datasources:
     def get_table_list(self) -> List[str]:
         return [ds.name for ds in self.datasources]
 
-    def add_datasource(self, name: str, data: pl.LazyFrame, type: str, source: str):
+    def add_datasource(self, name: str, type: str, source: str):
         if name in self.get_table_list():
             self.remove_datasource(name)
         try:
+            data: pl.LazyFrame | None = None
+            if type == 'QUERY':
+                data = self.sql_context.execute(source)
+            else: # load local file
+                if source.endswith('.parquet'):
+                    data = pl.scan_parquet(source)
+                elif source.endswith('.csv'):
+                    data = pl.scan_csv(source)
+
+            if data is None:
+                raise DatasourceError(f"Could not load {source}")
+
             new_datasource = DataSource(
                 name,
                 data.select(pl.len()).collect().item(),
@@ -121,7 +137,7 @@ class AppState:
         self.pending_select_query_id: int | None = None
         self.pending_delete_query_id: int | None = None
         self.open_delete_popup: bool = False
-        self.save_ds_name: str = ''
+        self.save_ds_name: str = ""
 
         self.charts: Dict[int, ChartTab] = {}
 
@@ -133,11 +149,42 @@ class AppState:
         self.datasources_sidebar_width: float = 250.0
         self.results_height = DEFAULT_RESULTS_HEIGHT
 
+        self.file_dialog = None
+        self.files_to_process: list[str] = []
+        self.files_to_process_popup_open: bool = False
+
         if DEBUG:
-            self.load_state('test_data/state.data-viz')
+            self.load_state("test_data/state.data-viz")
 
     def load_state(self, filename: str):
-        pass
+        try:
+            with open(filename, "r") as f:
+                dict_state = yaml.safe_load(f.read())
+        except Exception as e:
+            raise FileLoadError(f"Something went wrong while loading {filename}: {str(e)}")
+
+        schemas = {
+            'DATASOURCES': ["name", "type", "source"],
+            'QUERIES': ["name", "query"]
+        }
+
+        for key, key_list in schemas.items():
+            values = dict_state.get(key, [])
+            if isinstance(values, list):
+                for ds in values:
+                    for k in key_list:
+                        if k not in ds:
+                            raise FileLoadError(f"Some {key} are missing the {k}.")
+
+        if isinstance(dict_state.get("DATASOURCES", []), list):
+            for ds in dict_state.get("DATASOURCES", []):
+                self.datasources.add_datasource(ds["name"], ds["type"], ds["source"])
+        if isinstance(dict_state.get("QUERIES", []), list):
+            for ds in dict_state.get("QUERIES", []):
+                self.add_query(ds["query"], ds["name"])
+        if isinstance(dict_state.get("CHARTS", []), list):
+            for ds in dict_state.get("CHARTS", []): # TODO
+                self.add_chart()
 
     def save_state(self, filename: str):
         pass
@@ -151,9 +198,11 @@ class AppState:
             return self.status_message
         return None
 
-    def add_query(self, default_query: str='') -> QueryTab:
+    def add_query(self, default_query: str="", query_name: str | None = None) -> QueryTab:
         new_id = max([0] + list(self.queries.keys())) + 1
-        self.queries[new_id] = QueryTab(id=new_id, name=f"Query {new_id}")
+        if query_name is None:
+            query_name = f"Query {new_id}"
+        self.queries[new_id] = QueryTab(id=new_id, name=query_name)
         self.queries[new_id].editor.set_text(default_query)
         self.active_query_id = new_id
         self.pending_select_query_id = new_id
