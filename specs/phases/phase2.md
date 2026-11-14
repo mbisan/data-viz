@@ -19,3 +19,5 @@ This second phase involves fixing some ui elements and behaviour on the datasour
   - [ ] Saving a query saves a lazyframe on the sqlcontext.
 - The state:
   - [ ] The sqlcontext checks for duplicate table names before adding a new table.
+  - [ ] For each datasource, a source and source_type must be specified (e.g. LOCAL_STORAGE with file path, QUERY with query text).
+  - [ ] Allow removing datasources, while preventing removing datasources which are parent to others.

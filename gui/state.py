@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 import time
+from turtle import width
 from typing import List, Tuple, Dict, Optional
 from imgui_bundle import imgui_color_text_edit as ed
 from gui.config import DEFAULT_RESULTS_HEIGHT, DEBUG
@@ -13,34 +14,66 @@ import polars as pl
 class DatasourceError(Exception):
     pass
 
+@dataclass
+class DataSource:
+    name: str
+    height: int
+    frame: pl.LazyFrame
+    schema: pl.Schema
+    type: str
+    source: str
+
 class Datasources:
     sql_context: pl.SQLContext
     num_rows: int
-    schemas: Dict[str, pl.Schema]
+    datasources: List[DataSource]
 
     def __init__(self, num_rows: int = 10000):
         self.sql_context = pl.SQLContext()
         self.num_rows = num_rows
-        self.schemas = {}
-
-    def add_datasource(self, name: str, data: pl.LazyFrame):
-        self.sql_context.register(name, data)
-        self.schemas[name] = data.collect_schema()
-
-    def remove_datasource(self, name: str):
-        self.sql_context.unregister(name)
-        del self.schemas[name]
-
-    def get_schema(self, name: str) -> pl.Schema:
-        if name not in self.schemas:
-            raise DatasourceError(f"There is no table named: {name}")
-        return self.schemas[name]
-
-    def get_schemas(self) -> Dict[str, pl.Schema]:
-        return self.schemas
+        self.datasources = []
 
     def get_table_list(self) -> List[str]:
-        return list(self.schemas.keys())
+        return [ds.name for ds in self.datasources]
+
+    def add_datasource(self, name: str, data: pl.LazyFrame, type: str, source: str):
+        if name in self.get_table_list():
+            raise DatasourceError(f"Table name is already used: {name}")
+        self.datasources.append(
+            DataSource(
+                name,
+                data.select(pl.len()).collect().item(),
+                data,
+                data.collect_schema(),
+                type,
+                source
+            )
+        )
+        self.sql_context.register(name, data)
+
+    def remove_datasource(self, name: str):
+        idx = next((i for i, ds in enumerate(self.datasources) if ds.name == name), None)
+        if idx is None:
+            raise DatasourceError(f"There is no table named: {name}")
+
+        dependent = []
+        for ds in self.datasources:
+            if name in ds.source:
+                dependent.append(ds.name)
+        if len(dependent)>0:
+            raise DatasourceError(f"These tables depend on {name}: {dependent}")
+
+        self.sql_context.unregister(name)
+        del self.datasources[idx]
+
+    def get_schema(self, name: str) -> pl.Schema:
+        match_df = next((ds for ds in self.datasources if ds.name == name), None)
+        if match_df is None:
+            raise DatasourceError(f"There is no table named: {name}")
+        return match_df.schema
+
+    def get_schemas(self) -> Dict[str, pl.Schema]:
+        return {ds.name: ds.schema for ds in self.datasources}
 
     def execute_query(self, query: str) -> Tuple[int, pl.DataFrame]:
         try:
@@ -81,15 +114,21 @@ class AppState:
         if DEBUG:
             self.datasources.add_datasource(
                 'segsocial_consolidado',
-                pl.scan_parquet('test_data/segsocial_consolidado.parquet')
+                pl.scan_parquet('test_data/segsocial_consolidado.parquet'),
+                'LOCAL',
+                'test_data/segsocial_consolidado.parquet'
             )
             self.datasources.add_datasource(
                 'iris',
-                pl.scan_csv('test_data/iris.csv')
+                pl.scan_csv('test_data/iris.csv'),
+                'LOCAL',
+                'test_data/iris.csv'
             )
             self.datasources.add_datasource(
                 'test_cases',
-                pl.scan_csv('test_data/test.csv')
+                pl.scan_csv('test_data/test.csv'),
+                'LOCAL',
+                'test_data/test.csv'
             )
             self.queries[0] = QueryTab(id=0, name='Test Query')
             test_query = 'SELECT * FROM segsocial_consolidado'

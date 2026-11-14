@@ -57,13 +57,13 @@ def _render_sidebar(state: AppState) -> None:
     sidebar_avail = imgui.get_content_region_avail()
     imgui.begin_child("DatasourceListChild", imgui.ImVec2(0.0, sidebar_avail.y), child_flags=0)
 
-    for table_name, table_schema in state.datasources.schemas.items():
-        clicked, _ = imgui.selectable(table_name, False)
+    for ds in state.datasources.datasources:
+        clicked, _ = imgui.selectable(ds.name, False)
         if clicked:
             pass
 
         imgui.indent(12.0)
-        imgui.text_disabled(f"{len(table_schema)} columns")
+        imgui.text_disabled(f"{len(ds.schema)} columns")
         imgui.unindent(12.0)
         imgui.spacing()
 
