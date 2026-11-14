@@ -87,6 +87,10 @@ class AppState:
                 'iris',
                 pl.scan_csv('test_data/iris.csv')
             )
+            self.datasources.add_datasource(
+                'test_cases',
+                pl.scan_csv('test_data/test.csv')
+            )
             self.queries[0] = QueryTab(id=0, name='Test Query')
             test_query = 'SELECT * FROM segsocial_consolidado'
             self.queries[0].editor.set_text(test_query)

@@ -1,0 +1,21 @@
+This second phase involves fixing some ui elements and behaviour on the datasources tab.
+
+- The table view:
+  - [ ] The pagination control should go on the bottom right of the table
+  - [ ] The table size is not properly computed, since a scrollbar appears whenever data is displayed
+  - [ ] Numbers are displayed right-aligned.
+  - [ ] Floats are rounded to 3 decimals.
+  - [ ] Long strings are truncated to 50 characters.
+  - [ ] Multiline strings with \n characters are displayed in a single line.
+- The datasource list:
+  - [ ] The tables now show the column count, when clicking it should toggle a column list and data type. This is saved in the state (column_list_open: dict[str, bool]).
+  - [ ] Each row is displayed as follows: left-aligned: the name, right aligned (with spacing) the type of the column.
+- The editor:
+  - [ ] Pressing shift+enter executes the query.
+  - [ ] Error messages should properly be displayed on the table view. If the error is long, there should be a scrollbar.
+  - [ ] When executing a query, the table view is opened even if it was closed.
+  - [ ] When executing a query, the previous result is cleared from memory.
+  - [ ] When deleting a non-empty query, ask for confirmation.
+  - [ ] Saving a query saves a lazyframe on the sqlcontext.
+- The state:
+  - [ ] The sqlcontext checks for duplicate table names before adding a new table.
