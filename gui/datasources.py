@@ -1,12 +1,34 @@
+from time import time
+
 from imgui_bundle import imgui, rich_md
 from gui.config import (
     MIN_EDITOR_HEIGHT,
     MAX_UNPAGED_CELLS,
     DEFAULT_PAGE_SIZE,
+    MAX_CELL_CHARS,
     render_vertical_splitter,
     render_horizontal_splitter,
 )
 from gui.state import AppState, QueryTab, DatasourceError
+
+
+def execute_query(state: AppState, active_query: QueryTab):
+    query = active_query.editor.get_text()
+    active_query.result_rows = 0
+    active_query.result_dataframe = None
+    active_query.result_error = None
+    state.results_collapsed = False
+    try:
+        a = time()
+        rows, result_df = state.datasources.execute_query(query)
+        time_taken = time()-a
+        active_query.result_rows = rows
+        active_query.result_dataframe = result_df
+        active_query.page = 0
+        if active_query.result_dataframe is not None:
+            state.set_status(f"Query executed successfully ({active_query.result_dataframe.height:,} rows returned in {int(time_taken*1000)}ms)")
+    except DatasourceError as e:
+        active_query.result_error = str(e)
 
 
 def render_datasources_tab(state: AppState) -> None:
@@ -57,15 +79,55 @@ def _render_sidebar(state: AppState) -> None:
     sidebar_avail = imgui.get_content_region_avail()
     imgui.begin_child("DatasourceListChild", imgui.ImVec2(0.0, sidebar_avail.y), child_flags=0)
 
+    datasource_to_remove = None
+
     for ds in state.datasources.datasources:
-        clicked, _ = imgui.selectable(ds.name, False)
+        clicked, _ = imgui.selectable(f"{ds.name}##{id(ds)}", ds.show_columns)
+
+        if imgui.begin_popup_context_item(f"ManageDatasourcePopup_{id(ds.name)}"):
+            open_in_query_clicked, _ = imgui.selectable("Open in query", True)
+            if open_in_query_clicked: # open the datasource on a new query
+                if ds.type == 'QUERY':
+                    state.add_query(ds.source)
+                else:
+                    column_names = [f'`{col}`' if '.' in col else col for col in ds.schema.names()]
+                    state.add_query('SELECT\n  ' + ',\n  '.join(column_names) + f'\nFROM\n  {ds.name}')
+
+            delete_button_clicked, _ = imgui.selectable("Remove datasource", True)
+            if delete_button_clicked:
+                datasource_to_remove = ds.name
+            imgui.end_popup()
+
         if clicked:
-            pass
+            ds.show_columns = not ds.show_columns
 
         imgui.indent(12.0)
-        imgui.text_disabled(f"{len(ds.schema)} columns")
+        imgui.text_disabled(f"{ds.height:,} rows  •  {len(ds.schema)} columns")
+
+        if ds.show_columns:
+            imgui.spacing()
+            right_edge = imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+
+            for col_name, col_type in ds.schema.items():
+                type_str = str(col_type)
+                type_width = imgui.calc_text_size(type_str).x
+
+                imgui.text(col_name)
+
+                imgui.same_line()
+                imgui.set_cursor_pos_x(right_edge - type_width)
+                imgui.text_disabled(type_str)
+
         imgui.unindent(12.0)
         imgui.spacing()
+
+    if datasource_to_remove is not None:
+        try:
+            msg = f"Successfully removed {datasource_to_remove}"
+            state.datasources.remove_datasource(datasource_to_remove)
+            state.set_status(msg)
+        except DatasourceError as e:
+            state.set_status(str(e))
 
     imgui.end_child()
 
@@ -82,8 +144,6 @@ def _render_right_pane(state: AppState) -> None:
     if io.key_ctrl and imgui.is_key_chord_pressed(int(imgui.Key.mod_ctrl) | int(imgui.Key.mod_shift) | int(imgui.Key._7)):
         active_query.editor.toggle_comments()
         state.set_status("Toggled comment on selected line(s)")
-
-    _render_action_bar(state, active_query)
 
     imgui.spacing()
 
@@ -106,7 +166,19 @@ def _render_right_pane(state: AppState) -> None:
     if code_font is not None:
         imgui.push_font(code_font.font, code_font.size)
 
+    io = imgui.get_io()
+    focused = imgui.is_window_focused(imgui.FocusedFlags_.child_windows)
+    shift_enter = (
+        focused and io.key_ctrl and not io.key_shift and not io.key_alt
+        and imgui.is_key_pressed(imgui.Key.enter, False)
+    )
+    if shift_enter:
+        active_query.editor.set_read_only_enabled(True)
+        execute_query(state, active_query)
+
     active_query.editor.render(f"SqlTextEditor_{active_query.id}", imgui.ImVec2(avail.x, editor_height))
+    if shift_enter:
+        active_query.editor.set_read_only_enabled(False)
 
     if code_font is not None:
         imgui.pop_font()
@@ -120,36 +192,20 @@ def _render_right_pane(state: AppState) -> None:
     _render_results_section(state, active_query, table_height)
 
 
-def _render_action_bar(state: AppState, active_query: QueryTab) -> None:
-    if imgui.button("Execute Query", imgui.ImVec2(120.0, 28.0)):
-        query = active_query.editor.get_text()
-        print(query)
-        try:
-            rows, result_df = state.datasources.execute_query(query)
-            active_query.result_rows = rows
-            active_query.result_dataframe = result_df
-            active_query.page = 0
-        except DatasourceError as e:
-            state.set_status(f"{e}")
-        if active_query.result_dataframe is not None:
-            state.set_status(f"Query executed successfully ({active_query.result_dataframe.height:,} rows returned in 4.2ms)")
-
-    imgui.same_line()
-
-    if imgui.button("Save as Datasource", imgui.ImVec2(150.0, 28.0)):
-        new_ds_name = f"query_{active_query.id}_result.parquet"
-        state.set_status(f"Saved query results as new datasource: '{new_ds_name}'")
-
 def _render_query_tab_bar(state: AppState) -> None:
     if imgui.begin_tab_bar("SqlQueryTabBar", imgui.TabBarFlags_.reorderable):
-        query_to_remove = None
-
-        for query_id, query in state.queries.items():
+        for query in state.queries.values():
             tab_label = f"{query.name}###query_tab_{query.id}"
 
-            selected, p_open = imgui.begin_tab_item(tab_label, p_open=True)
-            if not p_open:
-                query_to_remove = query.id
+            flags = imgui.TabItemFlags_.no_assumed_closure
+            if state.pending_select_query_id == query.id:
+                flags |= imgui.TabItemFlags_.set_selected
+                state.pending_select_query_id = None  # one-shot
+
+            selected, p_open = imgui.begin_tab_item(tab_label, p_open=True, flags=flags)
+            if not p_open and state.pending_delete_query_id is None:
+                state.pending_delete_query_id = query.id
+                state.open_delete_popup = True
 
             if imgui.begin_popup_context_item(f"RenameQueryPopup_{query.id}"):
                 imgui.text("Rename Query:")
@@ -162,8 +218,20 @@ def _render_query_tab_bar(state: AppState) -> None:
                 state.active_query_id = query.id
                 imgui.end_tab_item()
 
-        if query_to_remove is not None:
-            state.remove_query(query_to_remove)
+        if state.pending_delete_query_id is not None:
+            popup_id = f"RemoveQueryPopup"
+            if state.open_delete_popup:
+                imgui.open_popup(popup_id)
+                state.open_delete_popup = False
+            query_to_delete = state.queries[state.pending_delete_query_id]
+            if imgui.begin_popup(popup_id):
+                if imgui.button(f"Delete '{query_to_delete.name}'?"):
+                    state.remove_query(query_to_delete.id)
+                    state.pending_delete_query_id = None
+                    imgui.close_current_popup()
+                imgui.end_popup()
+            else:
+                state.pending_delete_query_id = None
 
         if imgui.tab_item_button("+", imgui.TabItemFlags_.trailing):
             new_q = state.add_query()
@@ -177,10 +245,26 @@ def _render_results_section(state: AppState, active_query: QueryTab, table_heigh
     if imgui.button(toggle_label, imgui.ImVec2(130.0, 26.0)):
         state.results_collapsed = not state.results_collapsed
 
-    if active_query.result_dataframe is None:
+    imgui.same_line()
+
+    if imgui.button("Execute Query", imgui.ImVec2(120.0, 28.0)):
+        execute_query(state, active_query)
+
+    imgui.same_line()
+
+    if imgui.button("Save as Datasource", imgui.ImVec2(150.0, 28.0)):
+        state.save_ds_name = f"query_{active_query.id}_result"  # default suggestion
+        imgui.open_popup("Save as Datasource")
+
+    _render_save_datasource_popup(state, active_query, "Save as Datasource")
+
+    if active_query.result_error is not None and not state.results_collapsed:
+        if table_height > 0:
+            _render_error(active_query, table_height)
         return
 
-    imgui.separator()
+    if active_query.result_dataframe is None:
+        return
 
     avail_w = imgui.get_content_region_avail().x
     row_count_str = f"Total rows: {active_query.result_rows:,}"
@@ -224,6 +308,74 @@ def _render_results_section(state: AppState, active_query: QueryTab, table_heigh
         _render_table(active_query, table_height)
 
 
+def _render_save_datasource_popup(state: AppState, query: QueryTab, popup_id: str) -> None:
+    center = imgui.get_main_viewport().get_center()
+    imgui.set_next_window_pos(center, imgui.Cond_.appearing, imgui.ImVec2(0.5, 0.5))
+
+    opened, _ = imgui.begin_popup_modal(
+        popup_id, None, imgui.WindowFlags_.always_auto_resize
+    )
+    if not opened:
+        return
+
+    imgui.text("Name for the new datasource:")
+    imgui.set_next_item_width(300.0)
+    if imgui.is_window_appearing():
+        imgui.set_keyboard_focus_here()
+
+    submitted, state.save_ds_name = imgui.input_text(
+        "##save_ds_name",
+        state.save_ds_name,
+        imgui.InputTextFlags_.enter_returns_true,
+    )
+
+    name = state.save_ds_name.strip()
+    valid = bool(name)
+
+    imgui.spacing()
+
+    imgui.begin_disabled(not valid)
+    ok = imgui.button("OK", imgui.ImVec2(120.0, 0.0))
+    imgui.end_disabled()
+
+    imgui.same_line()
+    cancel = imgui.button("Cancel", imgui.ImVec2(120.0, 0.0))
+
+    if cancel or imgui.is_key_pressed(imgui.Key.escape):
+        imgui.close_current_popup()
+    elif (ok or submitted) and valid:
+        try:
+            query_str = query.editor.get_text()
+            df = state.datasources.sql_context.execute(query_str)
+            state.datasources.add_datasource(name, df, 'QUERY', query_str)
+            state.set_status(f"Saved query results as new datasource: '{name}'")
+            imgui.close_current_popup()
+        except DatasourceError as e:
+            state.set_status(f"Something went wrong: see error message")
+            query.result_error = str(e)
+            imgui.close_current_popup()
+
+    imgui.end_popup()
+
+
+def _render_error(query: QueryTab, height: float) -> None:
+    if query.result_error is None:
+        return
+    imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(1.0, 0.4, 0.4, 1.0))
+    imgui.begin_child(
+        f"ResultsError_{query.id}",
+        imgui.ImVec2(0.0, height),
+        child_flags=imgui.ChildFlags_.borders,
+    )
+    imgui.text_unformatted("Query failed")
+    imgui.separator()
+    imgui.push_text_wrap_pos(0.0)
+    imgui.text_unformatted(query.result_error)
+    imgui.pop_text_wrap_pos()
+    imgui.end_child()
+    imgui.pop_style_color()
+
+
 def _render_table(query: QueryTab, height: float) -> None:
     if query.result_dataframe is None:
         imgui.text_disabled("Nothing to display.")
@@ -239,34 +391,15 @@ def _render_table(query: QueryTab, height: float) -> None:
     total_rows = df.height
     total_cells = df.width * total_rows
     is_paged = total_cells > MAX_UNPAGED_CELLS
-    page_size = DEFAULT_PAGE_SIZE if is_paged else total_rows
+    page_size = DEFAULT_PAGE_SIZE if is_paged else max(total_rows, 1)
 
-    if is_paged and total_rows > 0:
-        max_page = (total_rows - 1) // page_size
-        current_page = query.page
-        start_idx = current_page * page_size
-        end_idx = min(start_idx + page_size, total_rows)
+    max_page = max(0, (total_rows - 1) // page_size) if total_rows > 0 else 0
+    query.page = min(max(query.page, 0), max_page)
+    current_page = query.page
 
-        imgui.align_text_to_frame_padding()
-        imgui.text(f"Showing results {start_idx + 1}-{end_idx} of {total_rows} rows")
-        imgui.same_line()
-
-        imgui.begin_disabled(current_page == 0)
-        if imgui.button(f"<##prev_{query.id}"):
-            query.page -= 1
-        imgui.end_disabled()
-
-        imgui.same_line()
-        imgui.begin_disabled(current_page >= max_page)
-        if imgui.button(f">##next_{query.id}"):
-            query.page += 1
-        imgui.end_disabled()
-
-        table_height = max(50.0, height - imgui.get_frame_height_with_spacing())
-    else:
-        start_idx = 0
-        end_idx = total_rows
-        table_height = height
+    start_idx = current_page * page_size
+    end_idx = min(start_idx + page_size, total_rows)
+    table_height = max(50.0, height - imgui.get_frame_height_with_spacing())
 
     page_rows = df.slice(start_idx, end_idx - start_idx).rows()
 
@@ -288,16 +421,51 @@ def _render_table(query: QueryTab, height: float) -> None:
 
         clipper = imgui.ListClipper()
         clipper.begin(len(page_rows))
+        schema_types = query.result_dataframe.schema.dtypes()
         while clipper.step():
             for row_idx in range(clipper.display_start, clipper.display_end):
                 row = page_rows[row_idx]
                 imgui.table_next_row()
-                for col_idx, val in enumerate(row):
+                for col_idx, (sch, val) in enumerate(zip(schema_types, row)):
                     imgui.table_set_column_index(col_idx)
-                    imgui.text_unformatted(str(val))
+                    if sch.is_numeric():
+                        if sch.is_float():
+                            text = f"{val:.3f}"
+                        else:
+                            text = str(val)
+                        text_w = imgui.calc_text_size(text).x
+                        avail_w = imgui.get_content_region_avail().x
+                        imgui.set_cursor_pos_x(
+                            imgui.get_cursor_pos_x() + max(0.0, avail_w - text_w)
+                        )
+                        imgui.text_unformatted(text)
+                    else:
+                        text = str(val).replace("\n", "\\n").replace("\r", "\\r")
+                        if len(text)>MAX_CELL_CHARS:
+                            text = text[:MAX_CELL_CHARS] + '...'
+                        imgui.text_unformatted(text)
         clipper.end()
 
         imgui.end_table()
+
+    imgui.indent(6.0)
+    imgui.begin_disabled(current_page == 0)
+    if imgui.button(f"<##prev_{query.id}"):
+        query.page -= 1
+    imgui.end_disabled()
+
+    imgui.same_line()
+    imgui.begin_disabled(current_page >= max_page)
+    if imgui.button(f">##next_{query.id}"):
+        query.page += 1
+    imgui.end_disabled()
+
+    imgui.same_line()
+    imgui.align_text_to_frame_padding()
+    if total_rows > 0:
+        imgui.text(f"Showing results {start_idx + 1:,}-{end_idx:,} of {total_rows:,} rows")
+    else:
+        imgui.text("Showing 0 rows")
 
 
 def _copy_results_to_clipboard(query: QueryTab) -> None:

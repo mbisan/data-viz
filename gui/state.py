@@ -22,6 +22,7 @@ class DataSource:
     schema: pl.Schema
     type: str
     source: str
+    show_columns: bool = False
 
 class Datasources:
     sql_context: pl.SQLContext
@@ -38,9 +39,9 @@ class Datasources:
 
     def add_datasource(self, name: str, data: pl.LazyFrame, type: str, source: str):
         if name in self.get_table_list():
-            raise DatasourceError(f"Table name is already used: {name}")
-        self.datasources.append(
-            DataSource(
+            self.remove_datasource(name)
+        try:
+            new_datasource = DataSource(
                 name,
                 data.select(pl.len()).collect().item(),
                 data,
@@ -48,7 +49,11 @@ class Datasources:
                 type,
                 source
             )
-        )
+        except pl.exceptions.SQLInterfaceError as e:
+            raise DatasourceError(f"SQL syntax or schema error: {e}") from e
+        except pl.exceptions.PolarsError as e:
+            raise DatasourceError(f"Query execution failed: {e}") from e
+        self.datasources.append(new_datasource)
         self.sql_context.register(name, data)
 
     def remove_datasource(self, name: str):
@@ -58,7 +63,7 @@ class Datasources:
 
         dependent = []
         for ds in self.datasources:
-            if name in ds.source:
+            if name in ds.source and name!=ds.name:
                 dependent.append(ds.name)
         if len(dependent)>0:
             raise DatasourceError(f"These tables depend on {name}: {dependent}")
@@ -92,6 +97,7 @@ class QueryTab:
     name: str
     result_dataframe: pl.DataFrame | None = None
     result_rows: int | None = None
+    result_error: str | None = None
     page: int = 0
     editor: ed.TextEditor = field(default_factory=create_sql_editor)
 
@@ -138,6 +144,10 @@ class AppState:
             self.queries[0].result_dataframe = res_df
 
         self.active_query_id: int = 0
+        self.pending_select_query_id: int | None = None
+        self.pending_delete_query_id: int | None = None
+        self.open_delete_popup: bool = False
+        self.save_ds_name: str = ''
 
         self.charts: Dict[int, ChartTab] = {}
 
@@ -158,10 +168,12 @@ class AppState:
             return self.status_message
         return None
 
-    def add_query(self) -> QueryTab:
+    def add_query(self, default_query: str='') -> QueryTab:
         new_id = max([0] + list(self.queries.keys())) + 1
         self.queries[new_id] = QueryTab(id=new_id, name=f"Query {new_id}")
+        self.queries[new_id].editor.set_text(default_query)
         self.active_query_id = new_id
+        self.pending_select_query_id = new_id
         return self.queries[new_id]
 
     def remove_query(self, query_id: int) -> None:
@@ -169,6 +181,7 @@ class AppState:
             del self.queries[query_id]
         if query_id == self.active_query_id:
             self.active_query_id = max([0] + [i for i in self.queries.keys()])
+            self.pending_select_query_id = self.active_query_id
 
     def get_active_query(self) -> Optional[QueryTab]:
         if self.active_query_id in self.queries:
