@@ -7,10 +7,36 @@ from gui.datasources import render_datasources_tab
 
 
 def render_main_layout(state: AppState) -> None:
+    io = imgui.get_io()
+    ctrl_s = (
+        io.key_ctrl and not io.key_shift and not io.key_alt
+        and imgui.is_key_pressed(imgui.Key.s, False)
+    )
+    if ctrl_s:
+        print('guardar main')
+
     tab_flags = imgui.TabBarFlags_.reorderable
 
     if imgui.begin_tab_bar("MainTabBar", tab_flags):
-        if imgui.begin_tab_item_simple("Datasources"):
+        if imgui.tab_item_button("File", imgui.TabItemFlags_.leading):
+            imgui.open_popup("FileMenuPopup")
+
+        btn_min = imgui.get_item_rect_min()
+        btn_max = imgui.get_item_rect_max()
+        imgui.set_next_window_pos(imgui.ImVec2(btn_min.x, btn_max.y))
+
+        if imgui.begin_popup("FileMenuPopup"):
+            clicked_open, _ = imgui.menu_item("Open...", "", False)
+            if clicked_open:
+                print('abrir')
+
+            clicked_save, _ = imgui.menu_item("Save", "Ctrl+S", False)
+            if clicked_save:
+                print('guardar')
+
+            imgui.end_popup()
+
+        if imgui.begin_tab_item_simple("Datasources", flags=imgui.TabItemFlags_.no_reorder):
             render_datasources_tab(state)
             imgui.end_tab_item()
 
@@ -20,20 +46,11 @@ def render_main_layout(state: AppState) -> None:
             tab_label = f"{chart.name}###chart_tab_{chart.id}"
             selected, p_open = imgui.begin_tab_item(tab_label, p_open=True)
 
-            if imgui.is_item_hovered() and imgui.is_mouse_double_clicked(imgui.MouseButton_.left):
-                imgui.open_popup(f"RenameChartPopup_{chart.id}")
-
-            if imgui.begin_popup(f"RenameChartPopup_{chart.id}"):
+            if imgui.begin_popup_context_item(f"RenameChartPopup_{chart.id}"):
                 imgui.text("Rename Chart:")
                 changed, new_title = imgui.input_text("##tab_doubleclick_rename", chart.name)
                 if changed and new_title.strip():
                     chart.name = new_title.strip()
-                imgui.spacing()
-                if imgui.button("OK", imgui.ImVec2(70.0, 0.0)) or imgui.is_key_pressed(imgui.Key.enter):
-                    imgui.close_current_popup()
-                imgui.same_line()
-                if imgui.button("Cancel", imgui.ImVec2(70.0, 0.0)):
-                    imgui.close_current_popup()
                 imgui.end_popup()
 
             if not p_open:

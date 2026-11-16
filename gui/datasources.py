@@ -204,16 +204,16 @@ def _render_right_pane(state: AppState) -> None:
             if not any(c == ord("1") for c in io.input_queue_characters):
                 io.add_key_event(imgui.Key.end, True)
                 io.add_key_event(imgui.Key.end, False)
-    shift_enter = (
+    ctrl_enter = (
         focused and io.key_ctrl and not io.key_shift and not io.key_alt
         and imgui.is_key_pressed(imgui.Key.enter, False)
     )
-    if shift_enter:
+    if ctrl_enter:
         active_query.editor.set_read_only_enabled(True)
         execute_query(state, active_query)
 
     active_query.editor.render(f"SqlTextEditor_{active_query.id}", imgui.ImVec2(avail.x, editor_height))
-    if shift_enter:
+    if ctrl_enter:
         active_query.editor.set_read_only_enabled(False)
 
     if code_font is not None:

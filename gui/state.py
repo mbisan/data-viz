@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 import time
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Any
 import yaml
 from imgui_bundle import imgui_color_text_edit as ed
 from gui.config import DEFAULT_RESULTS_HEIGHT, DEBUG
@@ -149,7 +149,7 @@ class AppState:
         self.datasources_sidebar_width: float = 250.0
         self.results_height = DEFAULT_RESULTS_HEIGHT
 
-        self.file_dialog = None
+        self.file_dialog: Any = None
         self.files_to_process: list[str] = []
         self.files_to_process_popup_open: bool = False
 
