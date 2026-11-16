@@ -1,0 +1,3 @@
+"multiline","long","integer","float"
+"Line one
+Line two with ""escaped"" quotes and, commas","A very looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong string",42,3.14159

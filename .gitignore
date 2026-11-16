@@ -11,5 +11,3 @@ wheels/
 
 # ImGui configuration files
 *.ini
-
-test_data/
